@@ -1,0 +1,13 @@
+[project]
+name = "dohprobe"
+version = "1.0.0"
+description = "Ultra-fast DNS-over-HTTPS testing tool"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.13.2",
+    "uvloop>=0.22.1",
+]
+
+[project.scripts]
+dohprobe = "dohprobe:run"
