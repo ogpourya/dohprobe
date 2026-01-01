@@ -1,5 +1,6 @@
 import sys
 import os
+import signal
 import asyncio
 import aiohttp
 import argparse
@@ -57,6 +58,13 @@ async def worker(queue, session, timeout, count, seen):
         queue.task_done()
 
 async def main():
+    # Force immediate exit on CTRL+C/SIGINT and SIGTERM
+    def force_exit(sig, frame):
+        os._exit(0)
+    
+    signal.signal(signal.SIGINT, force_exit)
+    signal.signal(signal.SIGTERM, force_exit)
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--timeout', type=float, default=0.5)
     parser.add_argument('-c', '--count', type=int, default=3)
@@ -82,10 +90,7 @@ async def main():
         await asyncio.gather(*workers)
 
 def run():
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        os._exit(0)
+    asyncio.run(main())
 
 if __name__ == "__main__":
     run()
