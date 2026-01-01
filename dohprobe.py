@@ -42,7 +42,7 @@ def normalize_url(input_str):
     except:
         return None
 
-async def worker(queue, session, timeout, count, seen):
+async def worker(queue, session, timeout, count, seen, verbose):
     while True:
         url = await queue.get()
         if url is None:
@@ -53,7 +53,7 @@ async def worker(queue, session, timeout, count, seen):
             if await check_doh(session, url, timeout, count):
                 print(url)
                 sys.stdout.flush()
-            else:
+            elif verbose:
                 sys.stderr.write(f"ERR: {url}\n")
         queue.task_done()
 
@@ -69,6 +69,7 @@ async def main():
     parser.add_argument('-t', '--timeout', type=float, default=0.5)
     parser.add_argument('-c', '--count', type=int, default=3)
     parser.add_argument('-w', '--workers', type=int, default=100)
+    parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
 
     queue = asyncio.Queue()
@@ -83,7 +84,7 @@ async def main():
         return
 
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=args.workers)) as session:
-        workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen)) for _ in range(args.workers)]
+        workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose)) for _ in range(args.workers)]
         await queue.join()
         for _ in range(args.workers):
             await queue.put(None)
