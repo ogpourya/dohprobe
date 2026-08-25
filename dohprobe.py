@@ -135,7 +135,7 @@ async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--timeout', type=float, default=2.0, help='timeout (seconds)')
     parser.add_argument('-c', '--count', type=int, default=1)
-    parser.add_argument('-w', '--workers', type=int, default=100)
+    parser.add_argument('-w', '--workers', type=int, default=20)
     parser.add_argument('-b', '--builtin', action='store_true', help='probe built-in list of known DoH providers instead of stdin')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
