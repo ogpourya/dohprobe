@@ -12,6 +12,59 @@ try:
 except ImportError:
     pass
 
+BUILTIN_DOH = [
+    'https://cloudflare-dns.com/dns-query',
+    'https://security.cloudflare-dns.com/dns-query',
+    'https://family.cloudflare-dns.com/dns-query',
+    'https://dns.google/dns-query',
+    'https://dns.google/resolve',
+    'https://dns.quad9.net/dns-query',
+    'https://dns.quad9.net:5053/dns-query',
+    'https://doh.opendns.com/dns-query',
+    'https://dns.adguard-dns.com/dns-query',
+    'https://unfiltered.adguard-dns.com/dns-query',
+    'https://family.adguard-dns.com/dns-query',
+    'https://anycast.dns.nextdns.io/dns-query',
+    'https://base.dns.mullvad.net/dns-query',
+    'https://all.dns.mullvad.net/dns-query',
+    'https://adblock.dns.mullvad.net/dns-query',
+    'https://dns.controld.com/p2',
+    'https://dns.alidns.com/dns-query',
+    'https://common.dot.dns.yandex.net/dns-query',
+    'https://dns-doh.dnsforfamily.com/dns-query',
+    'https://dns0.eu/dns-query',
+    'https://ada.openbld.net/dns-query',
+    'https://basic.rethinkdns.com/dns-query',
+    'https://child.joindns4.eu/dns-query',
+    'https://child-noads.joindns4.eu/dns-query',
+    'https://antivirus.bebasid.com/dns-query',
+    'https://dns.bebasid.com/dns-query',
+    'https://dns.bebasid.com/unfiltered',
+    'https://dns.bebasid.com/dns-hagezi',
+    'https://dns.bebasid.com/dns-oisd',
+    'https://doh.dns.sb/dns-query',
+    'https://doh.libredns.gr/dns-query',
+    'https://ordns.he.net/dns-query',
+    'https://dns.digitale-gesellschaft.ch/dns-query',
+    'https://doh.ffmuc.net/dns-query',
+    'https://doh.tiar.app/dns-query',
+    'https://doh.applied-privacy.net/query',
+    'https://dns.rubyfish.cn/dns-query',
+    'https://freedns.controld.com/p0',
+    'https://freedns.controld.com/p1',
+    'https://freedns.controld.com/p2',
+    'https://freedns.controld.com/p3',
+    'https://freedns.controld.com/family',
+    'https://public.dns.iij.jp/dns-query',
+    'https://dns.switch.ch/dns-query',
+    'https://doh.dnslify.com/dns-query',
+    'https://doh.crypto.sx/dns-query',
+    'https://jp.tiar.app/dns-query',
+    'https://dns.aa.net.uk/dns-query',
+    'https://doh.familyshield.opendns.com/dns-query',
+    'https://dns10.quad9.net/dns-query',
+]
+
 async def check_doh(session, url, timeout, count, verbose):
     headers = {'accept': 'application/dns-message'}
     # Valid base64url encoded DNS query for www.google.com (A)
@@ -83,14 +136,14 @@ async def main():
     parser.add_argument('-t', '--timeout', type=float, default=2.0, help='timeout (seconds)')
     parser.add_argument('-c', '--count', type=int, default=1)
     parser.add_argument('-w', '--workers', type=int, default=100)
+    parser.add_argument('-b', '--builtin', action='store_true', help='probe built-in list of known DoH providers instead of stdin')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
 
     queue = asyncio.Queue()
     seen = set()
-    
-    # Read all lines first to avoid blocking the loop
-    lines = sys.stdin.readlines()
+
+    lines = BUILTIN_DOH if args.builtin else sys.stdin.readlines()
     for line in lines:
         url = normalize_url(line)
         if url:
