@@ -28,7 +28,6 @@ BUILTIN_DOH = [
     'https://base.dns.mullvad.net/dns-query',
     'https://all.dns.mullvad.net/dns-query',
     'https://adblock.dns.mullvad.net/dns-query',
-    'https://dns.controld.com/p2',
     'https://dns.alidns.com/dns-query',
     'https://common.dot.dns.yandex.net/dns-query',
     'https://dns-doh.dnsforfamily.com/dns-query',
