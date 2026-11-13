@@ -195,7 +195,7 @@ async def main():
     loop = asyncio.get_running_loop()
     loop.set_default_executor(ThreadPoolExecutor(max_workers=max(32, num_workers * 2)))
 
-    connector = aiohttp.TCPConnector(limit=num_workers, force_close=True, ssl_shutdown_timeout=0)
+    connector = aiohttp.TCPConnector(limit=num_workers, force_close=True)
     async with aiohttp.ClientSession(connector=connector) as session:
         workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose, args.output)) for _ in range(num_workers)]
         await asyncio.gather(*workers)
