@@ -7,6 +7,7 @@ import asyncio
 import aiohttp
 import argparse
 import ipaddress
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 try:
@@ -71,13 +72,15 @@ async def check_doh(session, url, timeout, count, verbose):
     headers = {'accept': 'application/dns-message'}
     # Valid base64url encoded DNS query for www.google.com (A)
     params = {'dns': 'q80BAAABAAAAAAAAA3d3dwZnb29nbGUDY29tAAABAAE'}
+    client_timeout = aiohttp.ClientTimeout(total=timeout, connect=timeout, sock_connect=timeout, sock_read=timeout)
     for _ in range(count):
         try:
-            async with session.get(url, params=params, headers=headers, timeout=timeout, ssl=False, allow_redirects=True) as resp:
-                if resp.status == 200 and 'application/dns-message' in resp.headers.get('content-type', ''):
-                    return True
-                if verbose:
-                    sys.stderr.write(f"DEBUG: {url} status={resp.status} type={resp.headers.get('content-type')}\n")
+            async with asyncio.timeout(timeout):
+                async with session.get(url, params=params, headers=headers, timeout=client_timeout, ssl=False, allow_redirects=True) as resp:
+                    if resp.status == 200 and 'application/dns-message' in resp.headers.get('content-type', ''):
+                        return True
+                    if verbose:
+                        sys.stderr.write(f"DEBUG: {url} status={resp.status} type={resp.headers.get('content-type')}\n")
         except Exception as e:
             if verbose:
                 sys.stderr.write(f"DEBUG: {url} exception={type(e).__name__} {e}\n")
@@ -189,10 +192,17 @@ async def main():
         return
 
     num_workers = min(args.workers, queue.qsize())
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(ThreadPoolExecutor(max_workers=max(32, num_workers * 2)))
 
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=num_workers)) as session:
+    connector = aiohttp.TCPConnector(limit=num_workers, force_close=True, ssl_shutdown_timeout=0)
+    async with aiohttp.ClientSession(connector=connector) as session:
         workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose, args.output)) for _ in range(num_workers)]
         await asyncio.gather(*workers)
+
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
 
 def run():
     asyncio.run(main())
