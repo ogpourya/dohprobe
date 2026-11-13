@@ -229,9 +229,11 @@ async def main():
 
     if args.output == 'dnscrypt-proxy' and dnscrypt_entries:
         names = [name for name, _ in dnscrypt_entries]
+        print("# Put server_names at the top level (before any [section]):")
         print(f"server_names = {names!r}")
+        print("\n# Put [static.*] blocks under [static]:")
         for name, stamp in dnscrypt_entries:
-            print(f"\n[static.'{name}']\nstamp = '{stamp}'")
+            print(f"[static.'{name}']\nstamp = '{stamp}'\n")
 
     sys.stdout.flush()
     sys.stderr.flush()
