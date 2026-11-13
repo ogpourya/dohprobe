@@ -144,7 +144,25 @@ def to_sdns(url):
     )
     return 'sdns://' + base64.urlsafe_b64encode(raw).rstrip(b'=').decode('ascii')
 
-async def worker(queue, session, timeout, count, seen, verbose, output_type):
+def server_name(url, used_names):
+    parsed = urlparse(url)
+    name = (parsed.hostname or 'doh').replace("'", "")
+    if parsed.port and parsed.port != 443:
+        name = f"{name}-{parsed.port}"
+    path = parsed.path or '/dns-query'
+    if path != '/dns-query':
+        slug = path.strip('/').replace('/', '-').replace("'", "")
+        if slug:
+            name = f"{name}-{slug}"
+    base = name
+    i = 2
+    while name in used_names:
+        name = f"{base}-{i}"
+        i += 1
+    used_names.add(name)
+    return name
+
+async def worker(queue, session, timeout, count, seen, verbose, output_type, dnscrypt_names):
     while True:
         try:
             url = queue.get_nowait()
@@ -156,7 +174,15 @@ async def worker(queue, session, timeout, count, seen, verbose, output_type):
         if url not in seen:
             seen.add(url)
             if await check_doh(session, url, timeout, count, verbose):
-                print(to_sdns(url) if output_type == 'sdns' else url)
+                if output_type == 'sdns':
+                    print(to_sdns(url))
+                elif output_type == 'dnscrypt-proxy':
+                    if not dnscrypt_names:
+                        print("[static]")
+                    name = server_name(url, dnscrypt_names)
+                    print(f"  [static.'{name}']\n  stamp = '{to_sdns(url)}'")
+                else:
+                    print(url)
                 sys.stdout.flush()
             elif verbose:
                 sys.stderr.write(f"ERR: {url}\n")
@@ -175,7 +201,7 @@ async def main():
     parser.add_argument('-c', '--count', type=int, default=1)
     parser.add_argument('-w', '--workers', type=int, default=20)
     parser.add_argument('-b', '--builtin', action='store_true', help='probe built-in list of known DoH providers instead of stdin')
-    parser.add_argument('-o', '--output', choices=['url', 'sdns'], default='url', help='output format: url or sdns stamp (default: url)')
+    parser.add_argument('-o', '--output', choices=['url', 'sdns', 'dnscrypt-proxy'], default='url', help='output format: url, sdns stamp, or dnscrypt-proxy TOML (default: url)')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
 
@@ -195,10 +221,14 @@ async def main():
     loop = asyncio.get_running_loop()
     loop.set_default_executor(ThreadPoolExecutor(max_workers=max(32, num_workers * 2)))
 
+    dnscrypt_names = set()
     connector = aiohttp.TCPConnector(limit=num_workers, force_close=True)
     async with aiohttp.ClientSession(connector=connector) as session:
-        workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose, args.output)) for _ in range(num_workers)]
+        workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose, args.output, dnscrypt_names)) for _ in range(num_workers)]
         await asyncio.gather(*workers)
+
+    if args.output == 'dnscrypt-proxy' and dnscrypt_names:
+        print(f"\n# server_names = {sorted(dnscrypt_names)!r}")
 
     sys.stdout.flush()
     sys.stderr.flush()
