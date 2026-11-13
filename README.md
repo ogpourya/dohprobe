@@ -27,5 +27,6 @@ cat providers.txt | dohprobe -t 0.5 -c 3 -w 200
 - `-t, --timeout`: Timeout per request (seconds), supports decimals (default: `2.0`)
 - `-c, --count`: Number of retries per provider (default: `1`)
 - `-w, --workers`: Number of concurrent workers (default: `100`)
+- `-o, --output`: Output format: `url` or `sdns` stamp (default: `url`)
 - `-v, --verbose`: Show failure details on `stderr`
 

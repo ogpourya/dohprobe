@@ -1,9 +1,12 @@
 import sys
 import os
+import base64
+import struct
 import signal
 import asyncio
 import aiohttp
 import argparse
+import ipaddress
 from urllib.parse import urlparse
 
 try:
@@ -105,7 +108,40 @@ def normalize_url(input_str):
     except:
         return None
 
-async def worker(queue, session, timeout, count, seen, verbose):
+def to_sdns(url):
+    parsed = urlparse(url)
+    host = parsed.hostname or ''
+    is_ip = False
+    try:
+        ipaddress.ip_address(host)
+        is_ip = True
+    except ValueError:
+        pass
+
+    formatted_host = f'[{host}]' if ':' in host else host
+    if parsed.port and parsed.port != 443:
+        formatted_host = f'{formatted_host}:{parsed.port}'
+
+    addr = formatted_host if is_ip else ''
+    path = parsed.path or '/dns-query'
+
+    def lp(value):
+        data = value.encode('utf-8')
+        if len(data) > 255:
+            raise ValueError('DNS stamp field exceeds 255 bytes')
+        return bytes([len(data)]) + data
+
+    raw = (
+        b'\x02'
+        + struct.pack('<Q', 0)
+        + lp(addr)
+        + b'\x00'
+        + lp(formatted_host)
+        + lp(path)
+    )
+    return 'sdns://' + base64.urlsafe_b64encode(raw).rstrip(b'=').decode('ascii')
+
+async def worker(queue, session, timeout, count, seen, verbose, output_type):
     while True:
         try:
             url = queue.get_nowait()
@@ -117,7 +153,7 @@ async def worker(queue, session, timeout, count, seen, verbose):
         if url not in seen:
             seen.add(url)
             if await check_doh(session, url, timeout, count, verbose):
-                print(url)
+                print(to_sdns(url) if output_type == 'sdns' else url)
                 sys.stdout.flush()
             elif verbose:
                 sys.stderr.write(f"ERR: {url}\n")
@@ -136,6 +172,7 @@ async def main():
     parser.add_argument('-c', '--count', type=int, default=1)
     parser.add_argument('-w', '--workers', type=int, default=20)
     parser.add_argument('-b', '--builtin', action='store_true', help='probe built-in list of known DoH providers instead of stdin')
+    parser.add_argument('-o', '--output', choices=['url', 'sdns'], default='url', help='output format: url or sdns stamp (default: url)')
     parser.add_argument('-v', '--verbose', action='store_true')
     args = parser.parse_args()
 
@@ -154,7 +191,7 @@ async def main():
     num_workers = min(args.workers, queue.qsize())
 
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=num_workers)) as session:
-        workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose)) for _ in range(num_workers)]
+        workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose, args.output)) for _ in range(num_workers)]
         await asyncio.gather(*workers)
 
 def run():
