@@ -162,7 +162,7 @@ def server_name(url, used_names):
     used_names.add(name)
     return name
 
-async def worker(queue, session, timeout, count, seen, verbose, output_type, dnscrypt_names):
+async def worker(queue, session, timeout, count, seen, verbose, output_type, dnscrypt_names, dnscrypt_entries):
     while True:
         try:
             url = queue.get_nowait()
@@ -176,14 +176,13 @@ async def worker(queue, session, timeout, count, seen, verbose, output_type, dns
             if await check_doh(session, url, timeout, count, verbose):
                 if output_type == 'sdns':
                     print(to_sdns(url))
+                    sys.stdout.flush()
                 elif output_type == 'dnscrypt-proxy':
-                    if not dnscrypt_names:
-                        print("[static]")
                     name = server_name(url, dnscrypt_names)
-                    print(f"  [static.'{name}']\n  stamp = '{to_sdns(url)}'")
+                    dnscrypt_entries.append((name, to_sdns(url)))
                 else:
                     print(url)
-                sys.stdout.flush()
+                    sys.stdout.flush()
             elif verbose:
                 sys.stderr.write(f"ERR: {url}\n")
     queue.task_done()
@@ -222,13 +221,17 @@ async def main():
     loop.set_default_executor(ThreadPoolExecutor(max_workers=max(32, num_workers * 2)))
 
     dnscrypt_names = set()
+    dnscrypt_entries = []
     connector = aiohttp.TCPConnector(limit=num_workers, force_close=True)
     async with aiohttp.ClientSession(connector=connector) as session:
-        workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose, args.output, dnscrypt_names)) for _ in range(num_workers)]
+        workers = [asyncio.create_task(worker(queue, session, args.timeout, args.count, seen, args.verbose, args.output, dnscrypt_names, dnscrypt_entries)) for _ in range(num_workers)]
         await asyncio.gather(*workers)
 
-    if args.output == 'dnscrypt-proxy' and dnscrypt_names:
-        print(f"\n# server_names = {sorted(dnscrypt_names)!r}")
+    if args.output == 'dnscrypt-proxy' and dnscrypt_entries:
+        names = [name for name, _ in dnscrypt_entries]
+        print(f"server_names = {names!r}")
+        for name, stamp in dnscrypt_entries:
+            print(f"\n[static.'{name}']\nstamp = '{stamp}'")
 
     sys.stdout.flush()
     sys.stderr.flush()
